@@ -49,3 +49,13 @@ export type ContactInquiry = {
   created_at?: string;
 };
 
+export type Arena = {
+  id: string;
+  name: string;
+  short_description: string;
+  detailed_description?: string;
+  image_url: string;
+  capacity_min?: number;
+  capacity_max?: number;
+};
+

@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { Room, Booking, MenuItem, ContactInquiry } from '../types';
+import { Room, Booking, MenuItem, ContactInquiry, Arena } from '../types';
 
 // Supabase Configuration
 const metaEnv = (import.meta as any).env || {};
@@ -144,6 +144,13 @@ const DEFAULT_FRONTPAGE: FrontpageImage[] = [
   { id: 'f3', url: 'https://images.unsplash.com/photo-1550966871-3ed3cdb5ed0c?q=80&w=1200&auto=format&fit=crop', caption: 'Restaurant' }
 ];
 
+export const DEFAULT_ARENAS: Arena[] = [
+  { id: 'a1', name: 'Nidhivan Lawn', short_description: 'A beautiful lush green lawn for outdoor events, weddings, and large gatherings under the open sky.', detailed_description: 'A beautiful lush green lawn for outdoor events, weddings, and large gatherings under the open sky.', image_url: 'https://images.unsplash.com/photo-1519167758481-83f550bb49b3?q=80&w=600&auto=format&fit=crop' },
+  { id: 'a2', name: 'Vrindavan Hall', short_description: 'An elegant banquet hall for grand celebrations, complete with luxury interiors and premium lighting.', detailed_description: 'An elegant banquet hall for grand celebrations, complete with luxury interiors and premium lighting.', image_url: 'https://images.unsplash.com/photo-1522798514-97ceb8c4f1c8?q=80&w=600&auto=format&fit=crop' },
+  { id: 'a3', name: 'Madhuban Hall', short_description: 'A versatile hall perfect for corporate conferences, team-building activities, and intimate events.', detailed_description: 'A versatile hall perfect for corporate conferences, team-building activities, and intimate events.', image_url: 'https://images.unsplash.com/photo-1519167758481-83f550bb49b3?q=80&w=600&auto=format&fit=crop' },
+  { id: 'a4', name: 'Sattva Restaurant', short_description: 'Fine dining experience offering pure vegetarian delicacies with locally sourced ingredients.', detailed_description: 'Fine dining experience offering pure vegetarian delicacies with locally sourced ingredients.', image_url: 'https://images.unsplash.com/photo-1550966871-3ed3cdb5ed0c?q=80&w=600&auto=format&fit=crop' }
+];
+
 export interface GalleryItem {
   id: string;
   type: 'image' | 'video';
@@ -210,23 +217,54 @@ export const api = {
     if (supabase) {
       try {
         const { data, error } = await supabase.from('room_categories').select('*');
-        if (!error && data && data.length > 0) {
-          return data.map(r => ({
-            id: r.id,
-            name: r.name,
-            type: r.name.toLowerCase().includes('suite') ? 'Suite' : 'Standard',
-            price: Number(r.base_price),
-            description: r.description || '',
-            capacity: r.capacity || 2,
-            amenities: Array.isArray(r.amenities) ? r.amenities : ['Free WiFi', 'AC', 'TV'],
-            image_url: r.image_url || 'https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&q=80&w=800',
-            size: r.size || '320 sq. ft.',
-            bed_type: r.bed_type || 'Double Bed',
-            images: Array.isArray(r.images) ? r.images : (r.images ? String(r.images).split(',') : [])
-          }));
+        if (!error && data) {
+          if (data.length === 0) {
+            // Seed default rooms to Supabase!
+            const seedData = DEFAULT_ROOMS.map(r => ({
+              name: r.name,
+              description: r.description,
+              base_price: r.price,
+              capacity: r.capacity,
+              amenities: r.amenities,
+              image_url: r.image_url,
+              size: r.size || '320 sq. ft.',
+              bed_type: r.bed_type || 'Double Bed',
+              images: r.images || [r.image_url]
+            }));
+            const { data: insertedData, error: insertError } = await supabase.from('room_categories').insert(seedData).select('*');
+            if (!insertError && insertedData) {
+              return insertedData.map(r => ({
+                id: r.id,
+                name: r.name,
+                type: r.name.toLowerCase().includes('suite') ? 'Suite' : 'Standard',
+                price: Number(r.base_price),
+                description: r.description || '',
+                capacity: r.capacity || 2,
+                amenities: Array.isArray(r.amenities) ? r.amenities : ['Free WiFi', 'AC', 'TV'],
+                image_url: r.image_url || 'https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&q=80&w=800',
+                size: r.size || '320 sq. ft.',
+                bed_type: r.bed_type || 'Double Bed',
+                images: Array.isArray(r.images) ? r.images : []
+              }));
+            }
+          } else {
+            return data.map(r => ({
+              id: r.id,
+              name: r.name,
+              type: r.name.toLowerCase().includes('suite') ? 'Suite' : 'Standard',
+              price: Number(r.base_price),
+              description: r.description || '',
+              capacity: r.capacity || 2,
+              amenities: Array.isArray(r.amenities) ? r.amenities : ['Free WiFi', 'AC', 'TV'],
+              image_url: r.image_url || 'https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&q=80&w=800',
+              size: r.size || '320 sq. ft.',
+              bed_type: r.bed_type || 'Double Bed',
+              images: Array.isArray(r.images) ? r.images : []
+            }));
+          }
         }
       } catch (e) {
-        console.warn('Supabase rooms fetch failed, falling back to local storage', e);
+        console.warn('Supabase rooms fetch/seed failed, falling back to local storage', e);
       }
     }
     return getLocal<Room[]>('rooms', DEFAULT_ROOMS);
@@ -358,19 +396,43 @@ export const api = {
     if (supabase) {
       try {
         const { data, error } = await supabase.from('menu_items').select('*');
-        if (!error && data && data.length > 0) {
-          return data.map(m => ({
-            id: m.id,
-            name: m.name,
-            category: m.category_name || 'Main Course',
-            price: Number(m.price),
-            is_veg: m.is_veg ?? true,
-            description: m.description,
-            image_url: m.image_url
-          }));
+        if (!error && data) {
+          if (data.length === 0) {
+            // Seed default menu items
+            const seed = DEFAULT_MENU.map(m => ({
+              name: m.name,
+              category: m.category,
+              price: m.price,
+              is_veg: m.is_veg,
+              description: m.description || '',
+              image_url: m.image_url || ''
+            }));
+            const { data: inserted, error: insErr } = await supabase.from('menu_items').insert(seed).select('*');
+            if (!insErr && inserted) {
+              return inserted.map(m => ({
+                id: m.id,
+                name: m.name,
+                category: m.category || 'Main Course',
+                price: Number(m.price),
+                is_veg: m.is_veg ?? true,
+                description: m.description || '',
+                image_url: m.image_url || ''
+              }));
+            }
+          } else {
+            return data.map(m => ({
+              id: m.id,
+              name: m.name,
+              category: m.category || m.category_name || 'Main Course',
+              price: Number(m.price),
+              is_veg: m.is_veg ?? true,
+              description: m.description,
+              image_url: m.image_url
+            }));
+          }
         }
       } catch (e) {
-        console.warn('Supabase menu fetch failed, falling back to local storage', e);
+        console.warn('Supabase menu fetch/seed failed, falling back to local storage', e);
       }
     }
     return getLocal<MenuItem[]>('menu', DEFAULT_MENU);
@@ -516,11 +578,27 @@ export const api = {
 
     if (supabase) {
       try {
+        let finalCategoryId: string | null = bookingData.room_id || null;
+        
+        // If it's a mock ID like 'r1', map it to the actual database UUID based on name
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (finalCategoryId && !uuidRegex.test(finalCategoryId)) {
+          const mockRoom = DEFAULT_ROOMS.find(r => r.id === finalCategoryId);
+          const roomName = mockRoom ? mockRoom.name : 'Standard Room';
+          const { data: catData } = await supabase.from('room_categories').select('id, name');
+          if (catData && catData.length > 0) {
+            const match = catData.find(c => c.name.toLowerCase() === roomName.toLowerCase()) || catData[0];
+            finalCategoryId = match.id;
+          } else {
+            finalCategoryId = null;
+          }
+        }
+
         const { data, error } = await supabase.from('bookings').insert({
           guest_name: bookingData.guest_name,
           guest_email: bookingData.guest_email,
           guest_phone: bookingData.guest_phone,
-          category_id: bookingData.room_id || null,
+          category_id: finalCategoryId,
           check_in: bookingData.check_in,
           check_out: bookingData.check_out,
           adults: bookingData.adults,
@@ -539,6 +617,8 @@ export const api = {
             setLocal('bookings', updatedList);
           }
           newBooking.id = data.id;
+        } else if (error) {
+          console.error('Supabase booking creation error:', error);
         }
       } catch (e) {
         console.warn('Supabase booking create failed, stored locally', e);
@@ -706,8 +786,31 @@ export const api = {
     if (supabase) {
       try {
         const { data, error } = await supabase.from('heritage_places').select('*');
-        if (!error && data && data.length > 0) {
-          return data;
+        if (!error && data) {
+          if (data.length === 0) {
+            // Seed default heritage
+            const seed = DEFAULT_HERITAGE.map(h => ({
+              name: h.name,
+              description: h.description,
+              image_url: h.image_url
+            }));
+            const { data: inserted, error: insErr } = await supabase.from('heritage_places').insert(seed).select('*');
+            if (!insErr && inserted) {
+              return inserted.map(h => ({
+                id: h.id,
+                name: h.name,
+                description: h.description || '',
+                image_url: h.image_url || ''
+              }));
+            }
+          } else {
+            return data.map(h => ({
+              id: h.id,
+              name: h.name,
+              description: h.description || '',
+              image_url: h.image_url || ''
+            }));
+          }
         }
       } catch (e) {
         console.warn('Supabase heritage fetch failed, falling back to local storage', e);
@@ -793,12 +896,28 @@ export const api = {
     if (supabase) {
       try {
         const { data, error } = await supabase.from('frontpage_images').select('*');
-        if (!error && data && data.length > 0) {
-          return data.map(d => ({
-            id: d.id,
-            url: d.image_url,
-            caption: d.section || 'Gallery'
-          }));
+        if (!error && data) {
+          if (data.length === 0) {
+            // Seed default frontpage images
+            const seed = DEFAULT_FRONTPAGE.map(f => ({
+              image_url: f.url,
+              section: f.caption || 'Gallery'
+            }));
+            const { data: inserted, error: insErr } = await supabase.from('frontpage_images').insert(seed).select('*');
+            if (!insErr && inserted) {
+              return inserted.map(d => ({
+                id: d.id,
+                url: d.image_url,
+                caption: d.section || 'Gallery'
+              }));
+            }
+          } else {
+            return data.map(d => ({
+              id: d.id,
+              url: d.image_url,
+              caption: d.section || 'Gallery'
+            }));
+          }
         }
       } catch (e) {
         console.warn('Supabase frontpage fetch failed, falling back to local storage', e);
@@ -919,5 +1038,148 @@ export const api = {
     const list = getLocal<GalleryItem[]>('gallery', DEFAULT_GALLERY);
     const updated = list.filter(g => g.id !== id);
     setLocal('gallery', updated);
+  },
+
+  // 8. Arenas
+  getArenas: async (): Promise<Arena[]> => {
+    if (supabase) {
+      try {
+        const { data, error } = await supabase.from('arenas').select('*');
+        if (!error && data) {
+          if (data.length === 0) {
+            // Seed default arenas
+            const seed = DEFAULT_ARENAS.map(a => ({
+              name: a.name,
+              short_description: a.short_description,
+              detailed_description: a.detailed_description || a.short_description,
+              image_url: a.image_url,
+              capacity_min: a.capacity_min || 50,
+              capacity_max: a.capacity_max || 1000
+            }));
+            const { data: inserted, error: insErr } = await supabase.from('arenas').insert(seed).select('*');
+            if (!insErr && inserted) {
+              return inserted.map(a => ({
+                id: a.id,
+                name: a.name,
+                short_description: a.short_description || '',
+                detailed_description: a.detailed_description || '',
+                image_url: a.image_url || '',
+                capacity_min: a.capacity_min,
+                capacity_max: a.capacity_max
+              }));
+            }
+          } else {
+            return data.map(a => ({
+              id: a.id,
+              name: a.name,
+              short_description: a.short_description || '',
+              detailed_description: a.detailed_description || '',
+              image_url: a.image_url || '',
+              capacity_min: a.capacity_min,
+              capacity_max: a.capacity_max
+            }));
+          }
+        }
+      } catch (e) {
+        console.warn('Supabase arenas fetch/seed failed, using local storage', e);
+      }
+    }
+    return getLocal<Arena[]>('arenas', DEFAULT_ARENAS);
+  },
+
+  createArena: async (arenaData: Omit<Arena, 'id'>): Promise<Arena> => {
+    const tempId = 'temp-' + Math.random().toString(36).substring(7);
+    const newArena: Arena = { ...arenaData, id: tempId };
+    const list = getLocal<Arena[]>('arenas', DEFAULT_ARENAS);
+    list.push(newArena);
+    setLocal('arenas', list);
+
+    if (supabase) {
+      try {
+        const { data, error } = await supabase.from('arenas').insert({
+          name: arenaData.name,
+          short_description: arenaData.short_description,
+          detailed_description: arenaData.detailed_description || arenaData.short_description,
+          image_url: arenaData.image_url,
+          capacity_min: arenaData.capacity_min || 50,
+          capacity_max: arenaData.capacity_max || 1000
+        }).select().single();
+        if (!error && data) {
+          const createdArena: Arena = {
+            id: data.id,
+            name: data.name,
+            short_description: data.short_description || '',
+            detailed_description: data.detailed_description || '',
+            image_url: data.image_url || '',
+            capacity_min: data.capacity_min,
+            capacity_max: data.capacity_max
+          };
+          const updatedList = getLocal<Arena[]>('arenas', DEFAULT_ARENAS);
+          const idx = updatedList.findIndex(a => a.id === tempId);
+          if (idx > -1) {
+            updatedList[idx] = createdArena;
+            setLocal('arenas', updatedList);
+          }
+          return createdArena;
+        } else if (error) {
+          console.error('Supabase arena insert error:', error);
+        }
+      } catch (e) {
+        console.warn('Supabase arena create failed', e);
+      }
+    }
+    return newArena;
+  },
+
+  updateArena: async (id: string, updates: Partial<Arena>): Promise<Arena> => {
+    const list = getLocal<Arena[]>('arenas', DEFAULT_ARENAS);
+    const idx = list.findIndex(a => a.id === id);
+    let updatedLocal = {} as Arena;
+    if (idx > -1) {
+      list[idx] = { ...list[idx], ...updates };
+      updatedLocal = list[idx];
+      setLocal('arenas', list);
+    }
+
+    if (supabase) {
+      try {
+        const payload: any = {};
+        if (updates.name !== undefined) payload.name = updates.name;
+        if (updates.short_description !== undefined) payload.short_description = updates.short_description;
+        if (updates.detailed_description !== undefined) payload.detailed_description = updates.detailed_description;
+        if (updates.image_url !== undefined) payload.image_url = updates.image_url;
+        if (updates.capacity_min !== undefined) payload.capacity_min = updates.capacity_min;
+        if (updates.capacity_max !== undefined) payload.capacity_max = updates.capacity_max;
+
+        const { data, error } = await supabase.from('arenas').update(payload).eq('id', id).select().single();
+        if (!error && data) {
+          return {
+            id: data.id,
+            name: data.name,
+            short_description: data.short_description || '',
+            detailed_description: data.detailed_description || '',
+            image_url: data.image_url || '',
+            capacity_min: data.capacity_min,
+            capacity_max: data.capacity_max
+          };
+        }
+      } catch (e) {
+        console.warn('Supabase arena update failed', e);
+      }
+    }
+    return updatedLocal;
+  },
+
+  deleteArena: async (id: string): Promise<void> => {
+    if (supabase) {
+      try {
+        await supabase.from('arenas').delete().eq('id', id);
+      } catch (e) {
+        console.warn('Supabase arena delete failed', e);
+      }
+    }
+    const list = getLocal<Arena[]>('arenas', DEFAULT_ARENAS);
+    const updated = list.filter(a => a.id !== id);
+    setLocal('arenas', updated);
   }
 };

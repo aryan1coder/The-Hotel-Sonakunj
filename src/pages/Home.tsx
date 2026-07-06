@@ -6,6 +6,7 @@ import { addDays, format } from 'date-fns';
 import React, { useState, useEffect } from 'react';
 import { X, ChevronLeft, ChevronRight } from 'lucide-react';
 import SafeImage from '../components/SafeImage';
+import { Arena } from '../types';
 
 export default function Home() {
   const { data: menu } = useQuery({ queryKey: ['menu'], queryFn: api.getMenu });
@@ -14,6 +15,7 @@ export default function Home() {
   const { data: frontpageImages } = useQuery({ queryKey: ['frontpage'], queryFn: api.getFrontpageImages });
   const { data: settings } = useQuery({ queryKey: ['settings'], queryFn: api.getSettings });
   const { data: galleryItems } = useQuery({ queryKey: ['gallery'], queryFn: api.getGalleryItems });
+  const { data: arenas } = useQuery({ queryKey: ['arenas'], queryFn: api.getArenas });
 
   const [activeVideo, setActiveVideo] = useState<string | null>(null);
 
@@ -34,14 +36,7 @@ export default function Home() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
 
-  const [selectedArena, setSelectedArena] = useState<{name: string, desc: string, img: string} | null>(null);
-
-  const arenasData = [
-    { name: 'Nidhivan Lawn', img: 'https://images.unsplash.com/photo-1519167758481-83f550bb49b3?q=80&w=600&auto=format&fit=crop', desc: 'A beautiful lush green lawn for outdoor events, weddings, and large gatherings under the open sky.' },
-    { name: 'Vrindavan Hall', img: 'https://images.unsplash.com/photo-1522798514-97ceb8c4f1c8?q=80&w=600&auto=format&fit=crop', desc: 'An elegant banquet hall for grand celebrations, complete with luxury interiors and premium lighting.' },
-    { name: 'Madhuban Hall', img: 'https://images.unsplash.com/photo-1519167758481-83f550bb49b3?q=80&w=600&auto=format&fit=crop', desc: 'A versatile hall perfect for corporate conferences, team-building activities, and intimate events.' },
-    { name: 'Sattva Restaurant', img: 'https://images.unsplash.com/photo-1550966871-3ed3cdb5ed0c?q=80&w=600&auto=format&fit=crop', desc: 'Fine dining experience offering pure vegetarian delicacies with locally sourced ingredients.' }
-  ];
+  const [selectedArena, setSelectedArena] = useState<Arena | null>(null);
 
   const scrollerImages = frontpageImages && frontpageImages.length > 0 
     ? frontpageImages.map(img => img.url)
@@ -189,14 +184,14 @@ export default function Home() {
                 <p className="text-gray-500 uppercase tracking-widest text-sm mt-2">Versatile Spaces for Every Occasion</p>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {arenasData.map(arena => (
+                {(arenas || []).map(arena => (
                   <div 
-                    key={arena.name} 
+                    key={arena.id || arena.name} 
                     onClick={() => setSelectedArena(arena)}
                     className="relative group overflow-hidden rounded-2xl aspect-[4/3] bg-gray-100 flex items-center justify-center cursor-pointer shadow-sm hover:shadow-xl transition-all duration-500"
                   >
                     <div className="absolute inset-0 bg-black/30 z-10 transition-opacity duration-500 group-hover:bg-black/50 backdrop-blur-[2px] group-hover:backdrop-blur-sm"></div>
-                    <img src={arena.img} alt={arena.name} className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-out" />
+                    <img src={arena.image_url} alt={arena.name} className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-out" />
                     <div className="relative z-20 text-center px-6 transform group-hover:-translate-y-2 transition-transform duration-500">
                       <h4 className="text-white font-serif font-bold text-2xl tracking-wide drop-shadow-lg mb-2">{arena.name}</h4>
                       <p className="text-white/90 text-sm opacity-0 group-hover:opacity-100 transition-opacity duration-500 line-clamp-2">Click to view details</p>
@@ -491,11 +486,11 @@ export default function Home() {
               <X className="w-6 h-6" />
             </button>
             <div className="h-64 sm:h-80 w-full relative">
-              <img src={selectedArena.img} alt={selectedArena.name} className="w-full h-full object-cover" />
+              <img src={selectedArena.image_url} alt={selectedArena.name} className="w-full h-full object-cover" />
             </div>
             <div className="p-6 sm:p-8">
               <h3 className="text-3xl font-serif font-bold text-gray-900 mb-4">{selectedArena.name}</h3>
-              <p className="text-gray-600 text-lg leading-relaxed mb-6">{selectedArena.desc}</p>
+              <p className="text-gray-600 text-lg leading-relaxed mb-6">{selectedArena.detailed_description || selectedArena.short_description}</p>
               <button 
                 onClick={() => {
                   setSelectedArena(null);
