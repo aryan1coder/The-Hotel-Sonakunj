@@ -276,114 +276,108 @@ export const api = {
   },
 
   createRoom: async (roomData: Omit<Room, 'id'>): Promise<Room> => {
+    if (supabase) {
+      const { data, error } = await supabase.from('room_categories').insert({
+        name: roomData.name,
+        description: roomData.description,
+        base_price: roomData.price,
+        capacity: roomData.capacity,
+        amenities: roomData.amenities,
+        image_url: roomData.image_url,
+        size: roomData.size || '320 sq. ft.',
+        bed_type: roomData.bed_type || 'Double Bed',
+        images: roomData.images || [roomData.image_url]
+      }).select().single();
+
+      if (error) {
+        console.error('Supabase room insert error:', error);
+        throw new Error(error.message);
+      }
+      if (data) {
+        const createdRoom = {
+          id: data.id,
+          name: data.name,
+          type: data.name.toLowerCase().includes('suite') ? 'Suite' : 'Standard',
+          price: Number(data.base_price),
+          description: data.description || '',
+          capacity: data.capacity,
+          amenities: Array.isArray(data.amenities) ? data.amenities : [],
+          image_url: data.image_url,
+          size: data.size,
+          bed_type: data.bed_type,
+          images: Array.isArray(data.images) ? data.images : (data.images ? String(data.images).split(',') : [])
+        };
+        const list = getLocal<Room[]>('rooms', DEFAULT_ROOMS);
+        list.push(createdRoom);
+        setLocal('rooms', list);
+        return createdRoom;
+      }
+    }
     const tempId = 'temp-' + Math.random().toString(36).substring(7);
     const newRoom: Room = { ...roomData, id: tempId };
-    
-    // Always update local storage first
     const list = getLocal<Room[]>('rooms', DEFAULT_ROOMS);
     list.push(newRoom);
     setLocal('rooms', list);
-
-    if (supabase) {
-      try {
-        const { data, error } = await supabase.from('room_categories').insert({
-          name: roomData.name,
-          description: roomData.description,
-          base_price: roomData.price,
-          capacity: roomData.capacity,
-          amenities: roomData.amenities,
-          image_url: roomData.image_url,
-          size: roomData.size || '320 sq. ft.',
-          bed_type: roomData.bed_type || 'Double Bed',
-          images: roomData.images || [roomData.image_url]
-        }).select().single();
-        if (!error && data) {
-          const createdRoom = {
-            id: data.id,
-            name: data.name,
-            type: data.name.toLowerCase().includes('suite') ? 'Suite' : 'Standard',
-            price: Number(data.base_price),
-            description: data.description || '',
-            capacity: data.capacity,
-            amenities: Array.isArray(data.amenities) ? data.amenities : [],
-            image_url: data.image_url,
-            size: data.size,
-            bed_type: data.bed_type,
-            images: Array.isArray(data.images) ? data.images : (data.images ? String(data.images).split(',') : [])
-          };
-          // Synchronize local id with generated id
-          const updatedList = getLocal<Room[]>('rooms', DEFAULT_ROOMS);
-          const idx = updatedList.findIndex(r => r.id === tempId);
-          if (idx > -1) {
-            updatedList[idx] = createdRoom;
-            setLocal('rooms', updatedList);
-          }
-          return createdRoom;
-        } else if (error) {
-          console.error('Supabase room insert error:', error);
-        }
-      } catch (e) {
-        console.warn('Supabase room create failed, stored locally', e);
-      }
-    }
     return newRoom;
   },
 
   updateRoom: async (id: string, updates: Partial<Room>): Promise<Room> => {
-    // Always update local storage first
-    const list = getLocal<Room[]>('rooms', DEFAULT_ROOMS);
-    const index = list.findIndex(r => r.id === id);
-    let updatedLocalRoom = {} as Room;
-    if (index > -1) {
-      list[index] = { ...list[index], ...updates };
-      updatedLocalRoom = list[index];
-      setLocal('rooms', list);
-    } else {
-      throw new Error('Room not found');
-    }
-
     if (supabase) {
-      try {
-        const payload: any = {};
-        if (updates.name !== undefined) payload.name = updates.name;
-        if (updates.description !== undefined) payload.description = updates.description;
-        if (updates.price !== undefined) payload.base_price = updates.price;
-        if (updates.capacity !== undefined) payload.capacity = updates.capacity;
-        if (updates.amenities !== undefined) payload.amenities = updates.amenities;
-        if (updates.image_url !== undefined) payload.image_url = updates.image_url;
-        if (updates.size !== undefined) payload.size = updates.size;
-        if (updates.bed_type !== undefined) payload.bed_type = updates.bed_type;
-        if (updates.images !== undefined) payload.images = updates.images;
+      const payload: any = {};
+      if (updates.name !== undefined) payload.name = updates.name;
+      if (updates.description !== undefined) payload.description = updates.description;
+      if (updates.price !== undefined) payload.base_price = updates.price;
+      if (updates.capacity !== undefined) payload.capacity = updates.capacity;
+      if (updates.amenities !== undefined) payload.amenities = updates.amenities;
+      if (updates.image_url !== undefined) payload.image_url = updates.image_url;
+      if (updates.size !== undefined) payload.size = updates.size;
+      if (updates.bed_type !== undefined) payload.bed_type = updates.bed_type;
+      if (updates.images !== undefined) payload.images = updates.images;
 
-        const { data, error } = await supabase.from('room_categories').update(payload).eq('id', id).select().single();
-        if (!error && data) {
-          return {
-            id: data.id,
-            name: data.name,
-            type: data.name.toLowerCase().includes('suite') ? 'Suite' : 'Standard',
-            price: Number(data.base_price),
-            description: data.description || '',
-            capacity: data.capacity,
-            amenities: Array.isArray(data.amenities) ? data.amenities : [],
-            image_url: data.image_url,
-            size: data.size,
-            bed_type: data.bed_type,
-            images: Array.isArray(data.images) ? data.images : (data.images ? String(data.images).split(',') : [])
-          };
+      const { data, error } = await supabase.from('room_categories').update(payload).eq('id', id).select().single();
+      if (error) {
+        console.error('Supabase room update error:', error);
+        throw new Error(error.message);
+      }
+      if (data) {
+        const updatedRoom = {
+          id: data.id,
+          name: data.name,
+          type: data.name.toLowerCase().includes('suite') ? 'Suite' : 'Standard',
+          price: Number(data.base_price),
+          description: data.description || '',
+          capacity: data.capacity,
+          amenities: Array.isArray(data.amenities) ? data.amenities : [],
+          image_url: data.image_url,
+          size: data.size,
+          bed_type: data.bed_type,
+          images: Array.isArray(data.images) ? data.images : (data.images ? String(data.images).split(',') : [])
+        };
+        const list = getLocal<Room[]>('rooms', DEFAULT_ROOMS);
+        const index = list.findIndex(r => r.id === id);
+        if (index > -1) {
+          list[index] = updatedRoom;
+          setLocal('rooms', list);
         }
-      } catch (e) {
-        console.warn('Supabase room update failed, falling back to local storage', e);
+        return updatedRoom;
       }
     }
-    return updatedLocalRoom;
+    const list = getLocal<Room[]>('rooms', DEFAULT_ROOMS);
+    const index = list.findIndex(r => r.id === id);
+    if (index > -1) {
+      list[index] = { ...list[index], ...updates };
+      setLocal('rooms', list);
+      return list[index];
+    }
+    throw new Error('Room not found');
   },
 
   deleteRoom: async (id: string): Promise<void> => {
     if (supabase) {
-      try {
-        await supabase.from('room_categories').delete().eq('id', id);
-      } catch (e) {
-        console.warn('Supabase room delete failed', e);
+      const { error } = await supabase.from('room_categories').delete().eq('id', id);
+      if (error) {
+        console.error('Supabase room delete error:', error);
+        throw new Error(error.message);
       }
     }
     const list = getLocal<Room[]>('rooms', DEFAULT_ROOMS);
@@ -439,76 +433,76 @@ export const api = {
   },
 
   createMenuItem: async (itemData: Omit<MenuItem, 'id'>): Promise<MenuItem> => {
+    if (supabase) {
+      const { data, error } = await supabase.from('menu_items').insert({
+        name: itemData.name,
+        category: itemData.category,
+        price: itemData.price,
+        is_veg: itemData.is_veg,
+        description: itemData.description,
+        image_url: itemData.image_url
+      }).select().single();
+
+      if (error) {
+        console.error('Supabase menu item insert error:', error);
+        throw new Error(error.message);
+      }
+      if (data) {
+        const createdItem: MenuItem = {
+          id: data.id,
+          name: data.name,
+          category: data.category || itemData.category || 'Main Course',
+          price: Number(data.price),
+          is_veg: data.is_veg ?? true,
+          description: data.description || '',
+          image_url: data.image_url || ''
+        };
+        const list = getLocal<MenuItem[]>('menu', DEFAULT_MENU);
+        list.push(createdItem);
+        setLocal('menu', list);
+        return createdItem;
+      }
+    }
     const tempId = 'temp-' + Math.random().toString(36).substring(7);
     const newItem: MenuItem = { ...itemData, id: tempId };
-    
-    // Always write to local storage first
     const list = getLocal<MenuItem[]>('menu', DEFAULT_MENU);
     list.push(newItem);
     setLocal('menu', list);
-
-    if (supabase) {
-      try {
-        const { data, error } = await supabase.from('menu_items').insert({
-          name: itemData.name,
-          category: itemData.category,
-          price: itemData.price,
-          is_veg: itemData.is_veg,
-          description: itemData.description,
-          image_url: itemData.image_url
-        }).select().single();
-        if (!error && data) {
-          const createdItem: MenuItem = {
-            id: data.id,
-            name: data.name,
-            category: data.category || itemData.category || 'Main Course',
-            price: Number(data.price),
-            is_veg: data.is_veg ?? true,
-            description: data.description || '',
-            image_url: data.image_url || ''
-          };
-          // Sync local ID
-          const updatedList = getLocal<MenuItem[]>('menu', DEFAULT_MENU);
-          const index = updatedList.findIndex(m => m.id === tempId);
-          if (index > -1) {
-            updatedList[index] = createdItem;
-            setLocal('menu', updatedList);
-          }
-          return createdItem;
-        } else if (error) {
-          console.error('Supabase menu item insert error:', error);
-        }
-      } catch (e) {
-        console.warn('Supabase menu item create failed, falling back to local storage', e);
-      }
-    }
     return newItem;
   },
 
   updateMenuItem: async (id: string, updates: Partial<MenuItem>): Promise<MenuItem> => {
     if (supabase) {
-      try {
-        const payload: any = {};
-        if (updates.name !== undefined) payload.name = updates.name;
-        if (updates.price !== undefined) payload.price = updates.price;
-        if (updates.is_veg !== undefined) payload.is_veg = updates.is_veg;
-        if (updates.description !== undefined) payload.description = updates.description;
-        if (updates.image_url !== undefined) payload.image_url = updates.image_url;
+      const payload: any = {};
+      if (updates.name !== undefined) payload.name = updates.name;
+      if (updates.category !== undefined) payload.category = updates.category;
+      if (updates.price !== undefined) payload.price = updates.price;
+      if (updates.is_veg !== undefined) payload.is_veg = updates.is_veg;
+      if (updates.description !== undefined) payload.description = updates.description;
+      if (updates.image_url !== undefined) payload.image_url = updates.image_url;
 
-        const { data, error } = await supabase.from('menu_items').update(payload).eq('id', id).select().single();
-        if (!error && data) {
-          return {
-            id: data.id,
-            name: data.name,
-            category: data.category_name || updates.category || 'Main Course',
-            price: Number(data.price),
-            is_veg: data.is_veg,
-            description: data.description,
-            image_url: data.image_url
-          };
+      const { data, error } = await supabase.from('menu_items').update(payload).eq('id', id).select().single();
+      if (error) {
+        console.error('Supabase menu item update error:', error);
+        throw new Error(error.message);
+      }
+      if (data) {
+        const updatedItem: MenuItem = {
+          id: data.id,
+          name: data.name,
+          category: data.category || updates.category || 'Main Course',
+          price: Number(data.price),
+          is_veg: data.is_veg,
+          description: data.description,
+          image_url: data.image_url
+        };
+        const list = getLocal<MenuItem[]>('menu', DEFAULT_MENU);
+        const index = list.findIndex(m => m.id === id);
+        if (index > -1) {
+          list[index] = updatedItem;
+          setLocal('menu', list);
         }
-      } catch (e) {
-        console.warn('Supabase menu item update failed, falling back to local storage', e);
+        return updatedItem;
       }
     }
     const list = getLocal<MenuItem[]>('menu', DEFAULT_MENU);
@@ -523,10 +517,10 @@ export const api = {
 
   deleteMenuItem: async (id: string): Promise<void> => {
     if (supabase) {
-      try {
-        await supabase.from('menu_items').delete().eq('id', id);
-      } catch (e) {
-        console.warn('Supabase menu item delete failed', e);
+      const { error } = await supabase.from('menu_items').delete().eq('id', id);
+      if (error) {
+        console.error('Supabase menu item delete error:', error);
+        throw new Error(error.message);
       }
     }
     const list = getLocal<MenuItem[]>('menu', DEFAULT_MENU);
@@ -563,6 +557,64 @@ export const api = {
   },
 
   createBooking: async (bookingData: Omit<Booking, 'id' | 'status' | 'created_at'>): Promise<Booking> => {
+    if (supabase) {
+      let finalCategoryId: string | null = bookingData.room_id || null;
+      
+      // If it's a mock ID like 'r1', map it to the actual database UUID based on name
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (finalCategoryId && !uuidRegex.test(finalCategoryId)) {
+        const mockRoom = DEFAULT_ROOMS.find(r => r.id === finalCategoryId);
+        const roomName = mockRoom ? mockRoom.name : 'Standard Room';
+        const { data: catData } = await supabase.from('room_categories').select('id, name');
+        if (catData && catData.length > 0) {
+          const match = catData.find(c => c.name.toLowerCase() === roomName.toLowerCase()) || catData[0];
+          finalCategoryId = match.id;
+        } else {
+          finalCategoryId = null;
+        }
+      }
+
+      const { data, error } = await supabase.from('bookings').insert({
+        guest_name: bookingData.guest_name,
+        guest_email: bookingData.guest_email,
+        guest_phone: bookingData.guest_phone,
+        category_id: finalCategoryId,
+        check_in: bookingData.check_in,
+        check_out: bookingData.check_out,
+        adults: bookingData.adults,
+        kids: bookingData.kids,
+        total_amount: bookingData.total_price,
+        tax_amount: 0,
+        status: 'Confirmed',
+        payment_status: 'Pending'
+      }).select().single();
+
+      if (error) {
+        console.error('Supabase booking creation error:', error);
+        throw new Error(error.message);
+      }
+
+      if (data) {
+        const newBooking: Booking = {
+          id: data.id,
+          room_id: data.category_id || bookingData.room_id || '',
+          guest_name: data.guest_name,
+          guest_email: data.guest_email,
+          guest_phone: data.guest_phone,
+          check_in: data.check_in,
+          check_out: data.check_out,
+          adults: data.adults,
+          kids: data.kids || 0,
+          total_price: Number(data.total_amount),
+          status: data.status as any,
+          created_at: data.created_at
+        };
+        const list = getLocal<Booking[]>('bookings', []);
+        list.push(newBooking);
+        setLocal('bookings', list);
+        return newBooking;
+      }
+    }
     const id = Math.random().toString(36).substring(7);
     const newBooking: Booking = {
       ...bookingData,
@@ -570,111 +622,53 @@ export const api = {
       status: 'Confirmed',
       created_at: new Date().toISOString()
     };
-    
-    // Always write to local storage first
     const list = getLocal<Booking[]>('bookings', []);
     list.push(newBooking);
     setLocal('bookings', list);
-
-    if (supabase) {
-      try {
-        let finalCategoryId: string | null = bookingData.room_id || null;
-        
-        // If it's a mock ID like 'r1', map it to the actual database UUID based on name
-        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-        if (finalCategoryId && !uuidRegex.test(finalCategoryId)) {
-          const mockRoom = DEFAULT_ROOMS.find(r => r.id === finalCategoryId);
-          const roomName = mockRoom ? mockRoom.name : 'Standard Room';
-          const { data: catData } = await supabase.from('room_categories').select('id, name');
-          if (catData && catData.length > 0) {
-            const match = catData.find(c => c.name.toLowerCase() === roomName.toLowerCase()) || catData[0];
-            finalCategoryId = match.id;
-          } else {
-            finalCategoryId = null;
-          }
-        }
-
-        const { data, error } = await supabase.from('bookings').insert({
-          guest_name: bookingData.guest_name,
-          guest_email: bookingData.guest_email,
-          guest_phone: bookingData.guest_phone,
-          category_id: finalCategoryId,
-          check_in: bookingData.check_in,
-          check_out: bookingData.check_out,
-          adults: bookingData.adults,
-          kids: bookingData.kids,
-          total_amount: bookingData.total_price,
-          tax_amount: 0,
-          status: 'Confirmed',
-          payment_status: 'Pending'
-        }).select().single();
-        if (!error && data) {
-          // Synchronize local list with Supabase generated ID
-          const updatedList = getLocal<Booking[]>('bookings', []);
-          const index = updatedList.findIndex(b => b.id === id);
-          if (index > -1) {
-            updatedList[index].id = data.id;
-            setLocal('bookings', updatedList);
-          }
-          newBooking.id = data.id;
-        } else if (error) {
-          console.error('Supabase booking creation error:', error);
-        }
-      } catch (e) {
-        console.warn('Supabase booking create failed, stored locally', e);
-      }
-    }
     return newBooking;
   },
 
   updateBookingStatus: async (id: string, status: Booking['status']): Promise<void> => {
-    // Always update locally first
+    if (supabase) {
+      const { error } = await supabase.from('bookings').update({ status }).eq('id', id);
+      if (error) {
+        console.error('Supabase booking update error:', error);
+        throw new Error(error.message);
+      }
+    }
     const list = getLocal<Booking[]>('bookings', []);
     const index = list.findIndex(b => b.id === id);
     if (index > -1) {
       list[index].status = status;
       setLocal('bookings', list);
     }
-
-    if (supabase) {
-      try {
-        await supabase.from('bookings').update({ status }).eq('id', id);
-      } catch (e) {
-        console.warn('Supabase booking update failed', e);
-      }
-    }
   },
 
   deleteBooking: async (id: string): Promise<void> => {
-    // Always delete locally first
+    if (supabase) {
+      const { error } = await supabase.from('bookings').delete().eq('id', id);
+      if (error) {
+        console.error('Supabase booking delete error:', error);
+        throw new Error(error.message);
+      }
+    }
     const list = getLocal<Booking[]>('bookings', []);
     const updated = list.filter(b => b.id !== id);
     setLocal('bookings', updated);
-
-    if (supabase) {
-      try {
-        await supabase.from('bookings').delete().eq('id', id);
-      } catch (e) {
-        console.warn('Supabase booking delete failed', e);
-      }
-    }
   },
 
   deleteOlderBookings: async (): Promise<void> => {
     const todayStr = new Date().toISOString().split('T')[0];
-    
-    // Delete past bookings locally first
+    if (supabase) {
+      const { error } = await supabase.from('bookings').delete().lt('check_out', todayStr);
+      if (error) {
+        console.error('Supabase delete older bookings error:', error);
+        throw new Error(error.message);
+      }
+    }
     const list = getLocal<Booking[]>('bookings', []);
     const updated = list.filter(b => b.check_out >= todayStr);
     setLocal('bookings', updated);
-
-    if (supabase) {
-      try {
-        await supabase.from('bookings').delete().lt('check_out', todayStr);
-      } catch (e) {
-        console.warn('Supabase delete older bookings failed', e);
-      }
-    }
   },
 
   // Contact Inquiries API
@@ -751,34 +745,32 @@ export const api = {
   },
 
   updateInquiryStatus: async (id: string, status: ContactInquiry['status']): Promise<void> => {
+    if (supabase) {
+      const { error } = await supabase.from('contact_inquiries').update({ status }).eq('id', id);
+      if (error) {
+        console.error('Supabase inquiry status update error:', error);
+        throw new Error(error.message);
+      }
+    }
     const list = getLocal<ContactInquiry[]>('contact_inquiries', []);
     const index = list.findIndex(i => i.id === id);
     if (index > -1) {
       list[index].status = status;
       setLocal('contact_inquiries', list);
     }
-
-    if (supabase) {
-      try {
-        await supabase.from('contact_inquiries').update({ status }).eq('id', id);
-      } catch (e) {
-        console.warn('Supabase inquiry status update failed', e);
-      }
-    }
   },
 
   deleteInquiry: async (id: string): Promise<void> => {
+    if (supabase) {
+      const { error } = await supabase.from('contact_inquiries').delete().eq('id', id);
+      if (error) {
+        console.error('Supabase inquiry delete error:', error);
+        throw new Error(error.message);
+      }
+    }
     const list = getLocal<ContactInquiry[]>('contact_inquiries', []);
     const updated = list.filter(i => i.id !== id);
     setLocal('contact_inquiries', updated);
-
-    if (supabase) {
-      try {
-        await supabase.from('contact_inquiries').delete().eq('id', id);
-      } catch (e) {
-        console.warn('Supabase inquiry delete failed', e);
-      }
-    }
   },
 
   // 4. Heritage Places
@@ -820,52 +812,59 @@ export const api = {
   },
 
   createHeritagePlace: async (place: Omit<HeritagePlace, 'id'>): Promise<HeritagePlace> => {
+    if (supabase) {
+      const { data, error } = await supabase.from('heritage_places').insert({
+        name: place.name,
+        description: place.description,
+        image_url: place.image_url
+      }).select().single();
+
+      if (error) {
+        console.error('Supabase heritage insert error:', error);
+        throw new Error(error.message);
+      }
+      if (data) {
+        const createdPlace = {
+          id: data.id,
+          name: data.name,
+          description: data.description || '',
+          image_url: data.image_url || ''
+        };
+        const list = getLocal<HeritagePlace[]>('heritage', DEFAULT_HERITAGE);
+        list.push(createdPlace);
+        setLocal('heritage', list);
+        return createdPlace;
+      }
+    }
     const tempId = 'temp-' + Math.random().toString(36).substring(7);
     const newPlace = { ...place, id: tempId };
-    
-    // Always write locally first
     const list = getLocal<HeritagePlace[]>('heritage', DEFAULT_HERITAGE);
     list.push(newPlace);
     setLocal('heritage', list);
-
-    if (supabase) {
-      try {
-        const { data, error } = await supabase.from('heritage_places').insert({
-          name: place.name,
-          description: place.description,
-          image_url: place.image_url
-        }).select().single();
-        if (!error && data) {
-          const createdPlace = {
-            id: data.id,
-            name: data.name,
-            description: data.description || '',
-            image_url: data.image_url || ''
-          };
-          const updatedList = getLocal<HeritagePlace[]>('heritage', DEFAULT_HERITAGE);
-          const index = updatedList.findIndex(h => h.id === tempId);
-          if (index > -1) {
-            updatedList[index] = createdPlace;
-            setLocal('heritage', updatedList);
-          }
-          return createdPlace;
-        } else if (error) {
-          console.error('Supabase heritage insert error:', error);
-        }
-      } catch (e) {
-        console.warn('Supabase heritage create failed', e);
-      }
-    }
     return newPlace;
   },
 
   updateHeritagePlace: async (id: string, updates: Partial<HeritagePlace>): Promise<HeritagePlace> => {
     if (supabase) {
-      try {
-        const { data, error } = await supabase.from('heritage_places').update(updates).eq('id', id).select().single();
-        if (!error && data) return data;
-      } catch (e) {
-        console.warn('Supabase heritage update failed', e);
+      const { data, error } = await supabase.from('heritage_places').update(updates).eq('id', id).select().single();
+      if (error) {
+        console.error('Supabase heritage update error:', error);
+        throw new Error(error.message);
+      }
+      if (data) {
+        const updated = {
+          id: data.id,
+          name: data.name,
+          description: data.description || '',
+          image_url: data.image_url || ''
+        };
+        const list = getLocal<HeritagePlace[]>('heritage', DEFAULT_HERITAGE);
+        const index = list.findIndex(h => h.id === id);
+        if (index > -1) {
+          list[index] = updated;
+          setLocal('heritage', list);
+        }
+        return updated;
       }
     }
     const list = getLocal<HeritagePlace[]>('heritage', DEFAULT_HERITAGE);
@@ -880,10 +879,10 @@ export const api = {
 
   deleteHeritagePlace: async (id: string): Promise<void> => {
     if (supabase) {
-      try {
-        await supabase.from('heritage_places').delete().eq('id', id);
-      } catch (e) {
-        console.warn('Supabase heritage delete failed', e);
+      const { error } = await supabase.from('heritage_places').delete().eq('id', id);
+      if (error) {
+        console.error('Supabase heritage delete error:', error);
+        throw new Error(error.message);
       }
     }
     const list = getLocal<HeritagePlace[]>('heritage', DEFAULT_HERITAGE);
@@ -927,51 +926,52 @@ export const api = {
   },
 
   createFrontpageImage: async (image: Omit<FrontpageImage, 'id'>): Promise<FrontpageImage> => {
+    if (supabase) {
+      const { data, error } = await supabase.from('frontpage_images').insert({
+        image_url: image.url,
+        section: image.caption
+      }).select().single();
+
+      if (error) {
+        console.error('Supabase frontpage insert error:', error);
+        throw new Error(error.message);
+      }
+      if (data) {
+        const createdImage = { id: data.id, url: data.image_url, caption: data.section };
+        const list = getLocal<FrontpageImage[]>('frontpage', DEFAULT_FRONTPAGE);
+        list.push(createdImage);
+        setLocal('frontpage', list);
+        return createdImage;
+      }
+    }
     const tempId = 'temp-' + Math.random().toString(36).substring(7);
     const newImage = { ...image, id: tempId };
-    
-    // Always write locally first
     const list = getLocal<FrontpageImage[]>('frontpage', DEFAULT_FRONTPAGE);
     list.push(newImage);
     setLocal('frontpage', list);
-
-    if (supabase) {
-      try {
-        const { data, error } = await supabase.from('frontpage_images').insert({
-          image_url: image.url,
-          section: image.caption
-        }).select().single();
-        if (!error && data) {
-          const createdImage = { id: data.id, url: data.image_url, caption: data.section };
-          const updatedList = getLocal<FrontpageImage[]>('frontpage', DEFAULT_FRONTPAGE);
-          const index = updatedList.findIndex(f => f.id === tempId);
-          if (index > -1) {
-            updatedList[index] = createdImage;
-            setLocal('frontpage', updatedList);
-          }
-          return createdImage;
-        } else if (error) {
-          console.error('Supabase frontpage insert error:', error);
-        }
-      } catch (e) {
-        console.warn('Supabase frontpage create failed', e);
-      }
-    }
     return newImage;
   },
 
   updateFrontpageImage: async (id: string, updates: Partial<FrontpageImage>): Promise<FrontpageImage> => {
     if (supabase) {
-      try {
-        const payload: any = {};
-        if (updates.url !== undefined) payload.image_url = updates.url;
-        if (updates.caption !== undefined) payload.section = updates.caption;
-        const { data, error } = await supabase.from('frontpage_images').update(payload).eq('id', id).select().single();
-        if (!error && data) {
-          return { id: data.id, url: data.image_url, caption: data.section };
+      const payload: any = {};
+      if (updates.url !== undefined) payload.image_url = updates.url;
+      if (updates.caption !== undefined) payload.section = updates.caption;
+
+      const { data, error } = await supabase.from('frontpage_images').update(payload).eq('id', id).select().single();
+      if (error) {
+        console.error('Supabase frontpage update error:', error);
+        throw new Error(error.message);
+      }
+      if (data) {
+        const updated = { id: data.id, url: data.image_url, caption: data.section };
+        const list = getLocal<FrontpageImage[]>('frontpage', DEFAULT_FRONTPAGE);
+        const index = list.findIndex(f => f.id === id);
+        if (index > -1) {
+          list[index] = updated;
+          setLocal('frontpage', list);
         }
-      } catch (e) {
-        console.warn('Supabase frontpage update failed', e);
+        return updated;
       }
     }
     const list = getLocal<FrontpageImage[]>('frontpage', DEFAULT_FRONTPAGE);
@@ -986,10 +986,10 @@ export const api = {
 
   deleteFrontpageImage: async (id: string): Promise<void> => {
     if (supabase) {
-      try {
-        await supabase.from('frontpage_images').delete().eq('id', id);
-      } catch (e) {
-        console.warn('Supabase frontpage delete failed', e);
+      const { error } = await supabase.from('frontpage_images').delete().eq('id', id);
+      if (error) {
+        console.error('Supabase frontpage delete error:', error);
+        throw new Error(error.message);
       }
     }
     const list = getLocal<FrontpageImage[]>('frontpage', DEFAULT_FRONTPAGE);
@@ -999,10 +999,129 @@ export const api = {
 
   // 6. Settings
   getSettings: async (): Promise<HotelSettings> => {
+    if (supabase) {
+      try {
+        const { data, error } = await supabase.from('hotel_settings').select('*');
+        if (!error && data && data.length > 0) {
+          const s = data[0];
+          return {
+            hotel_name: s.hotel_name,
+            email: s.email,
+            phone: s.phone,
+            address: s.address,
+            description: s.description || '',
+            bhopal_airport: s.bhopal_airport || '',
+            bhopal_railway: s.bhopal_railway || '',
+            biaora_railway: s.biaora_railway || '',
+            logo_url: s.logo_url || ''
+          };
+        } else if (!error) {
+          // Seed settings if empty
+          const seed = {
+            hotel_name: DEFAULT_SETTINGS.hotel_name,
+            email: DEFAULT_SETTINGS.email,
+            phone: DEFAULT_SETTINGS.phone,
+            address: DEFAULT_SETTINGS.address,
+            description: DEFAULT_SETTINGS.description,
+            bhopal_airport: DEFAULT_SETTINGS.bhopal_airport,
+            bhopal_railway: DEFAULT_SETTINGS.bhopal_railway,
+            biaora_railway: DEFAULT_SETTINGS.biaora_railway,
+            logo_url: DEFAULT_SETTINGS.logo_url
+          };
+          const { data: inserted, error: insErr } = await supabase.from('hotel_settings').insert(seed).select('*').single();
+          if (!insErr && inserted) {
+            return {
+              hotel_name: inserted.hotel_name,
+              email: inserted.email,
+              phone: inserted.phone,
+              address: inserted.address,
+              description: inserted.description || '',
+              bhopal_airport: inserted.bhopal_airport || '',
+              bhopal_railway: inserted.bhopal_railway || '',
+              biaora_railway: inserted.biaora_railway || '',
+              logo_url: inserted.logo_url || ''
+            };
+          }
+        }
+      } catch (e) {
+        console.warn('Supabase settings fetch failed, using local storage', e);
+      }
+    }
     return getLocal<HotelSettings>('settings', DEFAULT_SETTINGS);
   },
 
   updateSettings: async (updates: Partial<HotelSettings>): Promise<HotelSettings> => {
+    if (supabase) {
+      // First get existing settings to get the ID or see if we need to insert
+      const { data: existing, error: getErr } = await supabase.from('hotel_settings').select('id');
+      if (!getErr && existing && existing.length > 0) {
+        const id = existing[0].id;
+        const { data, error } = await supabase.from('hotel_settings').update({
+          hotel_name: updates.hotel_name,
+          email: updates.email,
+          phone: updates.phone,
+          address: updates.address,
+          description: updates.description,
+          bhopal_airport: updates.bhopal_airport,
+          bhopal_railway: updates.bhopal_railway,
+          biaora_railway: updates.biaora_railway,
+          logo_url: updates.logo_url
+        }).eq('id', id).select().single();
+
+        if (error) {
+          console.error('Supabase settings update error:', error);
+          throw new Error(error.message);
+        }
+        if (data) {
+          const updated = {
+            hotel_name: data.hotel_name,
+            email: data.email,
+            phone: data.phone,
+            address: data.address,
+            description: data.description || '',
+            bhopal_airport: data.bhopal_airport || '',
+            bhopal_railway: data.bhopal_railway || '',
+            biaora_railway: data.biaora_railway || '',
+            logo_url: data.logo_url || ''
+          };
+          setLocal('settings', updated);
+          return updated;
+        }
+      } else {
+        // Create if it doesn't exist
+        const seed = {
+          hotel_name: updates.hotel_name || DEFAULT_SETTINGS.hotel_name,
+          email: updates.email || DEFAULT_SETTINGS.email,
+          phone: updates.phone || DEFAULT_SETTINGS.phone,
+          address: updates.address || DEFAULT_SETTINGS.address,
+          description: updates.description || DEFAULT_SETTINGS.description,
+          bhopal_airport: updates.bhopal_airport || DEFAULT_SETTINGS.bhopal_airport,
+          bhopal_railway: updates.bhopal_railway || DEFAULT_SETTINGS.bhopal_railway,
+          biaora_railway: updates.biaora_railway || DEFAULT_SETTINGS.biaora_railway,
+          logo_url: updates.logo_url || DEFAULT_SETTINGS.logo_url
+        };
+        const { data, error } = await supabase.from('hotel_settings').insert(seed).select().single();
+        if (error) {
+          console.error('Supabase settings insert error:', error);
+          throw new Error(error.message);
+        }
+        if (data) {
+          const updated = {
+            hotel_name: data.hotel_name,
+            email: data.email,
+            phone: data.phone,
+            address: data.address,
+            description: data.description || '',
+            bhopal_airport: data.bhopal_airport || '',
+            bhopal_railway: data.bhopal_railway || '',
+            biaora_railway: data.biaora_railway || '',
+            logo_url: data.logo_url || ''
+          };
+          setLocal('settings', updated);
+          return updated;
+        }
+      }
+    }
     const current = getLocal<HotelSettings>('settings', DEFAULT_SETTINGS);
     const updated = { ...current, ...updates };
     setLocal('settings', updated);
@@ -1011,10 +1130,67 @@ export const api = {
 
   // 7. Gallery Images & Videos
   getGalleryItems: async (): Promise<GalleryItem[]> => {
+    if (supabase) {
+      try {
+        const { data, error } = await supabase.from('gallery_items').select('*');
+        if (!error && data) {
+          if (data.length === 0) {
+            // Seed default gallery
+            const seed = DEFAULT_GALLERY.map(g => ({
+              type: g.type,
+              url: g.url,
+              caption: g.caption
+            }));
+            const { data: inserted, error: insErr } = await supabase.from('gallery_items').insert(seed).select('*');
+            if (!insErr && inserted) {
+              return inserted.map(g => ({
+                id: g.id,
+                type: g.type as 'image' | 'video',
+                url: g.url,
+                caption: g.caption || ''
+              }));
+            }
+          } else {
+            return data.map(g => ({
+              id: g.id,
+              type: g.type as 'image' | 'video',
+              url: g.url,
+              caption: g.caption || ''
+            }));
+          }
+        }
+      } catch (e) {
+        console.warn('Supabase gallery items fetch failed, using local storage', e);
+      }
+    }
     return getLocal<GalleryItem[]>('gallery', DEFAULT_GALLERY);
   },
 
   createGalleryItem: async (item: Omit<GalleryItem, 'id'>): Promise<GalleryItem> => {
+    if (supabase) {
+      const { data, error } = await supabase.from('gallery_items').insert({
+        type: item.type,
+        url: item.url,
+        caption: item.caption
+      }).select().single();
+
+      if (error) {
+        console.error('Supabase gallery insert error:', error);
+        throw new Error(error.message);
+      }
+      if (data) {
+        const created = {
+          id: data.id,
+          type: data.type as 'image' | 'video',
+          url: data.url,
+          caption: data.caption || ''
+        };
+        const list = getLocal<GalleryItem[]>('gallery', DEFAULT_GALLERY);
+        list.push(created);
+        setLocal('gallery', list);
+        return created;
+      }
+    }
     const id = Math.random().toString(36).substring(7);
     const newItem = { ...item, id };
     const list = getLocal<GalleryItem[]>('gallery', DEFAULT_GALLERY);
@@ -1024,6 +1200,33 @@ export const api = {
   },
 
   updateGalleryItem: async (id: string, updates: Partial<GalleryItem>): Promise<GalleryItem> => {
+    if (supabase) {
+      const payload: any = {};
+      if (updates.type !== undefined) payload.type = updates.type;
+      if (updates.url !== undefined) payload.url = updates.url;
+      if (updates.caption !== undefined) payload.caption = updates.caption;
+
+      const { data, error } = await supabase.from('gallery_items').update(payload).eq('id', id).select().single();
+      if (error) {
+        console.error('Supabase gallery update error:', error);
+        throw new Error(error.message);
+      }
+      if (data) {
+        const updated = {
+          id: data.id,
+          type: data.type as 'image' | 'video',
+          url: data.url,
+          caption: data.caption || ''
+        };
+        const list = getLocal<GalleryItem[]>('gallery', DEFAULT_GALLERY);
+        const index = list.findIndex(g => g.id === id);
+        if (index > -1) {
+          list[index] = updated;
+          setLocal('gallery', list);
+        }
+        return updated;
+      }
+    }
     const list = getLocal<GalleryItem[]>('gallery', DEFAULT_GALLERY);
     const index = list.findIndex(g => g.id === id);
     if (index > -1) {
@@ -1035,6 +1238,13 @@ export const api = {
   },
 
   deleteGalleryItem: async (id: string): Promise<void> => {
+    if (supabase) {
+      const { error } = await supabase.from('gallery_items').delete().eq('id', id);
+      if (error) {
+        console.error('Supabase gallery delete error:', error);
+        throw new Error(error.message);
+      }
+    }
     const list = getLocal<GalleryItem[]>('gallery', DEFAULT_GALLERY);
     const updated = list.filter(g => g.id !== id);
     setLocal('gallery', updated);
@@ -1088,94 +1298,94 @@ export const api = {
   },
 
   createArena: async (arenaData: Omit<Arena, 'id'>): Promise<Arena> => {
+    if (supabase) {
+      const { data, error } = await supabase.from('arenas').insert({
+        name: arenaData.name,
+        short_description: arenaData.short_description,
+        detailed_description: arenaData.detailed_description || arenaData.short_description,
+        image_url: arenaData.image_url,
+        capacity_min: arenaData.capacity_min || 50,
+        capacity_max: arenaData.capacity_max || 1000
+      }).select().single();
+
+      if (error) {
+        console.error('Supabase arena insert error:', error);
+        throw new Error(error.message);
+      }
+      if (data) {
+        const createdArena: Arena = {
+          id: data.id,
+          name: data.name,
+          short_description: data.short_description || '',
+          detailed_description: data.detailed_description || '',
+          image_url: data.image_url || '',
+          capacity_min: data.capacity_min,
+          capacity_max: data.capacity_max
+        };
+        const list = getLocal<Arena[]>('arenas', DEFAULT_ARENAS);
+        list.push(createdArena);
+        setLocal('arenas', list);
+        return createdArena;
+      }
+    }
     const tempId = 'temp-' + Math.random().toString(36).substring(7);
     const newArena: Arena = { ...arenaData, id: tempId };
     const list = getLocal<Arena[]>('arenas', DEFAULT_ARENAS);
     list.push(newArena);
     setLocal('arenas', list);
-
-    if (supabase) {
-      try {
-        const { data, error } = await supabase.from('arenas').insert({
-          name: arenaData.name,
-          short_description: arenaData.short_description,
-          detailed_description: arenaData.detailed_description || arenaData.short_description,
-          image_url: arenaData.image_url,
-          capacity_min: arenaData.capacity_min || 50,
-          capacity_max: arenaData.capacity_max || 1000
-        }).select().single();
-        if (!error && data) {
-          const createdArena: Arena = {
-            id: data.id,
-            name: data.name,
-            short_description: data.short_description || '',
-            detailed_description: data.detailed_description || '',
-            image_url: data.image_url || '',
-            capacity_min: data.capacity_min,
-            capacity_max: data.capacity_max
-          };
-          const updatedList = getLocal<Arena[]>('arenas', DEFAULT_ARENAS);
-          const idx = updatedList.findIndex(a => a.id === tempId);
-          if (idx > -1) {
-            updatedList[idx] = createdArena;
-            setLocal('arenas', updatedList);
-          }
-          return createdArena;
-        } else if (error) {
-          console.error('Supabase arena insert error:', error);
-        }
-      } catch (e) {
-        console.warn('Supabase arena create failed', e);
-      }
-    }
     return newArena;
   },
 
   updateArena: async (id: string, updates: Partial<Arena>): Promise<Arena> => {
-    const list = getLocal<Arena[]>('arenas', DEFAULT_ARENAS);
-    const idx = list.findIndex(a => a.id === id);
-    let updatedLocal = {} as Arena;
-    if (idx > -1) {
-      list[idx] = { ...list[idx], ...updates };
-      updatedLocal = list[idx];
-      setLocal('arenas', list);
-    }
-
     if (supabase) {
-      try {
-        const payload: any = {};
-        if (updates.name !== undefined) payload.name = updates.name;
-        if (updates.short_description !== undefined) payload.short_description = updates.short_description;
-        if (updates.detailed_description !== undefined) payload.detailed_description = updates.detailed_description;
-        if (updates.image_url !== undefined) payload.image_url = updates.image_url;
-        if (updates.capacity_min !== undefined) payload.capacity_min = updates.capacity_min;
-        if (updates.capacity_max !== undefined) payload.capacity_max = updates.capacity_max;
+      const payload: any = {};
+      if (updates.name !== undefined) payload.name = updates.name;
+      if (updates.short_description !== undefined) payload.short_description = updates.short_description;
+      if (updates.detailed_description !== undefined) payload.detailed_description = updates.detailed_description;
+      if (updates.image_url !== undefined) payload.image_url = updates.image_url;
+      if (updates.capacity_min !== undefined) payload.capacity_min = updates.capacity_min;
+      if (updates.capacity_max !== undefined) payload.capacity_max = updates.capacity_max;
 
-        const { data, error } = await supabase.from('arenas').update(payload).eq('id', id).select().single();
-        if (!error && data) {
-          return {
-            id: data.id,
-            name: data.name,
-            short_description: data.short_description || '',
-            detailed_description: data.detailed_description || '',
-            image_url: data.image_url || '',
-            capacity_min: data.capacity_min,
-            capacity_max: data.capacity_max
-          };
+      const { data, error } = await supabase.from('arenas').update(payload).eq('id', id).select().single();
+      if (error) {
+        console.error('Supabase arena update error:', error);
+        throw new Error(error.message);
+      }
+      if (data) {
+        const updatedArena: Arena = {
+          id: data.id,
+          name: data.name,
+          short_description: data.short_description || '',
+          detailed_description: data.detailed_description || '',
+          image_url: data.image_url || '',
+          capacity_min: data.capacity_min,
+          capacity_max: data.capacity_max
+        };
+        const list = getLocal<Arena[]>('arenas', DEFAULT_ARENAS);
+        const idx = list.findIndex(a => a.id === id);
+        if (idx > -1) {
+          list[idx] = updatedArena;
+          setLocal('arenas', list);
         }
-      } catch (e) {
-        console.warn('Supabase arena update failed', e);
+        return updatedArena;
       }
     }
-    return updatedLocal;
+    const list = getLocal<Arena[]>('arenas', DEFAULT_ARENAS);
+    const idx = list.findIndex(a => a.id === id);
+    if (idx > -1) {
+      list[idx] = { ...list[idx], ...updates };
+      setLocal('arenas', list);
+      return list[idx];
+    }
+    throw new Error('Arena not found');
   },
 
   deleteArena: async (id: string): Promise<void> => {
     if (supabase) {
-      try {
-        await supabase.from('arenas').delete().eq('id', id);
-      } catch (e) {
-        console.warn('Supabase arena delete failed', e);
+      const { error } = await supabase.from('arenas').delete().eq('id', id);
+      if (error) {
+        console.error('Supabase arena delete error:', error);
+        throw new Error(error.message);
       }
     }
     const list = getLocal<Arena[]>('arenas', DEFAULT_ARENAS);

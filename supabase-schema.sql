@@ -172,6 +172,31 @@ CREATE TABLE IF NOT EXISTS public.heritage_places (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 13.5. Create Hotel Settings Table
+CREATE TABLE IF NOT EXISTS public.hotel_settings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  hotel_name TEXT NOT NULL,
+  email TEXT NOT NULL,
+  phone TEXT NOT NULL,
+  address TEXT NOT NULL,
+  description TEXT,
+  bhopal_airport TEXT,
+  bhopal_railway TEXT,
+  biaora_railway TEXT,
+  logo_url TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 13.6. Create Gallery Items Table
+CREATE TABLE IF NOT EXISTS public.gallery_items (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  type TEXT NOT NULL DEFAULT 'image', -- 'image' or 'video'
+  url TEXT NOT NULL,
+  caption TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- 14. Enable Row Level Security (RLS)
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.room_categories ENABLE ROW LEVEL SECURITY;
@@ -185,6 +210,8 @@ ALTER TABLE public.contact_inquiries ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.arenas ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.frontpage_images ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.heritage_places ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.hotel_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.gallery_items ENABLE ROW LEVEL SECURITY;
 
 -- 15. Create RLS Policies safely (Drop before Create)
 
@@ -282,6 +309,20 @@ CREATE POLICY "Admins can view contact inquiries" ON public.contact_inquiries FO
 
 DROP POLICY IF EXISTS "Admins can manage contact inquiries" ON public.contact_inquiries;
 CREATE POLICY "Admins can manage contact inquiries" ON public.contact_inquiries FOR ALL USING (true) WITH CHECK (true);
+
+-- Hotel Settings Policies
+DROP POLICY IF EXISTS "Public can view hotel settings" ON public.hotel_settings;
+CREATE POLICY "Public can view hotel settings" ON public.hotel_settings FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Admins can manage hotel settings" ON public.hotel_settings;
+CREATE POLICY "Admins can manage hotel settings" ON public.hotel_settings FOR ALL USING (true) WITH CHECK (true);
+
+-- Gallery Items Policies
+DROP POLICY IF EXISTS "Public can view gallery items" ON public.gallery_items;
+CREATE POLICY "Public can view gallery items" ON public.gallery_items FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Admins can manage gallery items" ON public.gallery_items;
+CREATE POLICY "Admins can manage gallery items" ON public.gallery_items FOR ALL USING (true) WITH CHECK (true);
 
 -- 16. Trigger modification function
 CREATE OR REPLACE FUNCTION update_modified_column()

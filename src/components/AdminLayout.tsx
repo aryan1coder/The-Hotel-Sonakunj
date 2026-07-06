@@ -8,11 +8,13 @@ import React, { useState, useEffect } from 'react';
 
 export default function AdminLayout() {
   const location = useLocation();
-  const { isAuthenticated, login, logout, lockoutUntil } = useAdminAuth();
+  const { isAuthenticated, login, logout, lockoutUntil, isLoading: isAuthLoading } = useAdminAuth();
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [timeLeft, setTimeLeft] = useState(0);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { data: settings } = useQuery({ queryKey: ['settings'], queryFn: api.getSettings });
 
@@ -34,9 +36,12 @@ export default function AdminLayout() {
     }
   }, [lockoutUntil]);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const result = login(password);
+    setIsSubmitting(true);
+    setError('');
+    const result = await login(email || 'jcs26051109@gmail.com', password);
+    setIsSubmitting(false);
     if (!result.success) {
       setError(result.error!);
     }
@@ -54,6 +59,14 @@ export default function AdminLayout() {
     { name: 'Settings', path: '/admin/settings', icon: Settings },
   ];
 
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-bento-primary"></div>
+      </div>
+    );
+  }
+
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
@@ -68,17 +81,30 @@ export default function AdminLayout() {
             </div>
           </div>
           <h2 className="text-2xl font-serif font-bold text-center mb-2">Admin Login</h2>
-          <p className="text-gray-500 text-center text-sm mb-8">Enter your secure password to access the panel.</p>
+          <p className="text-gray-500 text-center text-sm mb-8">Enter email and password to access the panel.</p>
           
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
+              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1">Email Address</label>
+              <input 
+                type="email" 
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="jcs26051109@gmail.com" 
+                className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-bento-primary focus:border-bento-primary outline-none transition-all"
+                disabled={timeLeft > 0 || isSubmitting}
+              />
+              <span className="text-[10px] text-gray-400 mt-1 block">Leave empty to use default admin email</span>
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1">Password</label>
               <input 
                 type="password" 
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Password" 
                 className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-bento-primary focus:border-bento-primary outline-none transition-all"
-                disabled={timeLeft > 0}
+                disabled={timeLeft > 0 || isSubmitting}
               />
             </div>
             {error && (
@@ -89,10 +115,10 @@ export default function AdminLayout() {
             )}
             <button 
               type="submit"
-              disabled={timeLeft > 0}
-              className="w-full bg-bento-text text-white font-bold py-3 rounded-xl hover:bg-black transition-colors disabled:opacity-50"
+              disabled={timeLeft > 0 || isSubmitting}
+              className="w-full bg-bento-text text-white font-bold py-3 rounded-xl hover:bg-black transition-colors disabled:opacity-50 flex justify-center items-center"
             >
-              Login
+              {isSubmitting ? 'Authenticating...' : 'Login'}
             </button>
           </form>
           
